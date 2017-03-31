@@ -713,6 +713,9 @@ func TestGetQuoteID(t *testing.T) {
 
 	_, err = getQuoteID(&Order{})
 	assert.Equal(t, ErrInvalidArgumentType, err)
+
+	_, err = getQuoteID(&Quote{})
+	assert.Equal(t, ErrNoQuoteID, err)
 }
 
 func TestPlaceQuote(t *testing.T) {
@@ -740,4 +743,19 @@ func TestPlaceQuote(t *testing.T) {
 		t.Logf("Retrieved quote: %#v", res2)
 		return
 	}
+}
+
+func TestRequestQuoteErr(t *testing.T) {
+	api := getAPI()
+	_, err := api.RequestQuote(ctx, nil)
+	assert.Error(t, err)
+}
+
+func TestRetrieveQuoteErr(t *testing.T) {
+	api := getAPI()
+	_, err := api.RetrieveQuote(ctx, "invalid")
+	assert.Error(t, err)
+
+	_, err = api.RetrieveQuote(ctx, &Order{})
+	assert.Equal(t, ErrInvalidArgumentType, err)
 }

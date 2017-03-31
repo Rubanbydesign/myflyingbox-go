@@ -13,10 +13,7 @@ type Response struct {
 
 func (r Response) Error() error {
 	if r.Status == "failure" {
-		if r.ErrorInfo != nil {
-			return r.ErrorInfo.Error()
-		}
-		return errors.New(r.Status)
+		return r.ErrorInfo.Error()
 	}
 	return nil
 }

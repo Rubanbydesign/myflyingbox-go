@@ -7,9 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -20,27 +18,15 @@ const (
 	TestURL = "https://test.myflyingbox.com/v2"
 )
 
+// Error messages
 var (
 	// ErrInvalidArgumentType is returns when a argument which has an interface
 	// type does not recieve a value it can use
 	ErrInvalidArgumentType = errors.New("invalid argument type")
+
+	ErrNoOrderID = errors.New("no order id")
+	ErrNoQuoteID = errors.New("no quote id")
 )
-
-// Send interface is used to define custom data interfaces for sending data to the API.
-// Some (if not all) structs need to be wrapped in a "root" element for POSTing, so structs
-// which require that can implement the Sender() interface to return a custom version of
-// themselves which satisfies the API
-type Send interface {
-	Send() interface{}
-}
-
-// Form interface is used to define custom data interfaces for sending data to the API.
-// Some (if not all) structs need to be wrapped in a "root" element for POSTing, so structs
-// which require that can implement the Form() interface to return a custom set of key/Values
-// pairs for posting to the API as a encoded form.
-type Form interface {
-	Form() url.Values
-}
 
 // API is a myflyingbox.com API client for Go
 type API struct {
@@ -60,14 +46,15 @@ func (a *API) Do(ctx context.Context, req *http.Request, result interface{}) err
 	}
 	defer resp.Body.Close()
 
-	// TODO For testing only, remove when done
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	// Reset the body again.
-	fmt.Printf("Body: %s", string(bodyBytes))
-	resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	// For testing only, allows inspection of response body by reading and reset.
+	// var bodyBytes []byte
+	// if true {
+	// 	bodyBytes, err = ioutil.ReadAll(resp.Body)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	// }
 
 	var apiResp Response
 	if err = json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
@@ -82,71 +69,41 @@ func (a *API) Do(ctx context.Context, req *http.Request, result interface{}) err
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(data, result)
+	if err = json.Unmarshal(data, result); err != nil {
+		return err
+	}
+	return nil
 }
 
-// PostJSON sends a POST request with the JSON encoded data to the urlStr and marshals response into result
-func (a *API) PostJSON(ctx context.Context, urlStr string, data, result interface{}) error {
-
-	// If implementing the Send interface, then use that data instead.
-	if send, ok := data.(Send); ok {
-		data = send.Send()
-	}
+// Post sends a POST request with the JSON encoded data to the urlStr and marshals response into result
+func (a *API) Post(ctx context.Context, urlStr string, data, result interface{}) error {
 
 	// Requests need to be enclosed in a "root" element per the API
 	// docs, so we do that here.
-	payload := prepareRequest(data)
+	payload, err := prepareRequest(data)
+	if err != nil {
+		return err
+	}
 
-	// Marshal the data
+	// Marshal the data. Since the payload was already formatted, there won't be any errors encoding.
 	buf := bytes.NewBuffer(nil)
-	if err := json.NewEncoder(buf).Encode(payload); err != nil {
-		return err
-	}
-	req, err := http.NewRequest("POST", a.baseURL+"/"+strings.TrimPrefix(urlStr, "/"), buf)
-	if err != nil {
-		return err
-	}
+	json.NewEncoder(buf).Encode(payload)
+
+	// Create the request
+	req, _ := http.NewRequest("POST", a.baseURL+"/"+strings.TrimPrefix(urlStr, "/"), buf)
 	req.Header.Set("Content-Type", "application/json")
-	return a.Do(ctx, req, result)
-}
-
-// Post sends a POST request to the urlStr and marshals response into result
-func (a *API) Post(ctx context.Context, urlStr string, data, result interface{}) error {
-	var form url.Values
-
-	if f, ok := data.(url.Values); ok {
-		form = f
-	}
-	if fdata, ok := data.(Form); ok {
-		form = fdata.Form()
-	}
-	if form == nil || len(form) < 1 {
-		return errors.New("form is empty")
-	}
-
-	req, err := http.NewRequest("POST", a.baseURL+"/"+strings.TrimPrefix(urlStr, "/"), bytes.NewBufferString(form.Encode()))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return a.Do(ctx, req, result)
 }
 
 // Put is for delete requests, so only the urlStr is implemented
 func (a *API) Put(ctx context.Context, urlStr string, result interface{}) error {
-	req, err := http.NewRequest("PUT", a.baseURL+"/"+strings.TrimPrefix(urlStr, "/"), nil)
-	if err != nil {
-		return nil
-	}
+	req, _ := http.NewRequest("PUT", a.baseURL+"/"+strings.TrimPrefix(urlStr, "/"), nil)
 	return a.Do(ctx, req, result)
 }
 
 // Get sends a GET request to the urlStr and marshals response into result
 func (a *API) Get(ctx context.Context, urlStr string, result interface{}) error {
-	req, err := http.NewRequest("GET", a.baseURL+"/"+strings.TrimPrefix(urlStr, "/"), nil)
-	if err != nil {
-		return err
-	}
+	req, _ := http.NewRequest("GET", a.baseURL+"/"+strings.TrimPrefix(urlStr, "/"), nil)
 	return a.Do(ctx, req, result)
 }
 
@@ -185,18 +142,17 @@ func (a *API) LabelURL(ctx context.Context, o *Order) string {
 }
 
 // Track returns tracking information about the given order
-func (a *API) Track(ctx context.Context, o interface{}) (*Tracking, error) {
+func (a *API) Track(ctx context.Context, o interface{}) (list []Tracking, err error) {
 
-	var t Tracking
 	orderID, err := getOrderID(o)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := a.Get(ctx, fmt.Sprintf("/orders/%s/tracking", orderID), &t); err != nil {
+	if err := a.Get(ctx, fmt.Sprintf("/orders/%s/tracking", orderID), &list); err != nil {
 		return nil, err
 	}
-	return &t, nil
+	return
 }
 
 // GetOrder returns order info for the given order
@@ -206,7 +162,6 @@ func (a *API) GetOrder(ctx context.Context, o interface{}) (*Order, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var result Order
 	if err := a.Get(ctx, "/orders/"+orderID, &result); err != nil {
 		return nil, err
@@ -217,7 +172,7 @@ func (a *API) GetOrder(ctx context.Context, o interface{}) (*Order, error) {
 // PlaceOrder creates an order and returns the results
 func (a *API) PlaceOrder(ctx context.Context, o *Order) (*Order, error) {
 	var result Order
-	if err := a.PostJSON(ctx, "/orders", o, &result); err != nil {
+	if err := a.Post(ctx, "/orders", o, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -226,7 +181,7 @@ func (a *API) PlaceOrder(ctx context.Context, o *Order) (*Order, error) {
 // RequestQuote places a quote request and returns the result
 func (a *API) RequestQuote(ctx context.Context, q *Quote) (*Quote, error) {
 	var quote Quote
-	if err := a.PostJSON(ctx, "/quotes", q, &quote); err != nil {
+	if err := a.Post(ctx, "/quotes", q, &quote); err != nil {
 		return nil, err
 	}
 	return &quote, nil
@@ -260,6 +215,9 @@ func getQuoteID(q interface{}) (quoteID string, err error) {
 	default:
 		err = ErrInvalidArgumentType
 	}
+	if err == nil && quoteID == "" {
+		err = ErrNoQuoteID
+	}
 	return
 }
 
@@ -276,10 +234,8 @@ func getOrderID(o interface{}) (orderID string, err error) {
 	default:
 		err = ErrInvalidArgumentType
 	}
+	if err == nil && orderID == "" {
+		err = ErrNoOrderID
+	}
 	return
-}
-
-// getRootElement gets a root element with a given type for encoding JSON requests.
-func getRootElement(key string, el interface{}) map[string]interface{} {
-	return map[string]interface{}{key: el}
 }

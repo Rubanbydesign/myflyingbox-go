@@ -6,13 +6,13 @@ type Order struct {
 	// Used in placing the order.
 
 	OfferID        string  `json:"offer_id"`
-	ThermalLabels  bool    `json:"thermal_labels"`
+	ThermalLabels  bool    `json:"thermal_labels,omitempty"`
 	InsureShipment bool    `json:"insure_shipment"`
 	Shipper        Shipper `json:"shipper"`
 
 	Parcels []Parcel `json:"parcels"`
 
 	// Used when retrieving the order
-	ID        string    `json:"uuid,omitempty"`
+	ID        string    `json:"id,omitempty"`
 	Recipient Recipient `json:"recipient,omitempty"`
 }
