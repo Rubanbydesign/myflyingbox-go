@@ -82,7 +82,7 @@ func TestOrder(t *testing.T) {
 	// Place
 	o := Order{
 		OfferID:        quote.Offers[0].ID,
-		InsureShipment: true,
+		InsureShipment: false,
 		Shipper: Shipper{
 			Name:   "test shipment",
 			Street: "1 main st.",

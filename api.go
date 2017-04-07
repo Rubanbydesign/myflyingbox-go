@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 
@@ -28,6 +29,8 @@ var (
 
 	ErrNoOrderID = errors.New("no order id")
 	ErrNoQuoteID = errors.New("no quote id")
+
+	captureRespBody bool
 )
 
 // API is a myflyingbox.com API client for Go
@@ -49,21 +52,21 @@ func (a *API) Do(ctx context.Context, req *http.Request, result interface{}) err
 	defer resp.Body.Close()
 
 	// For testing only, allows inspection of response body by reading and reset.
-	// var bodyBytes []byte
-	// if true {
-	// 	bodyBytes, err = ioutil.ReadAll(resp.Body)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	log.Printf("Body: %s", string(bodyBytes))
-	// 	resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-	// }
+	var bodyBytes []byte
+	if captureRespBody {
+		bodyBytes, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	}
 
 	var apiResp Response
 	if err = json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return err
 	}
 	if err = apiResp.Error(); err != nil {
+		log.Printf("Body: %s", string(bodyBytes))
 		return err
 	}
 	// Could be done better here, but marshal the apiResp into json, then decode
