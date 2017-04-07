@@ -53,11 +53,8 @@ func (a *API) Do(ctx context.Context, req *http.Request, result interface{}) err
 
 	// For testing only, allows inspection of response body by reading and reset.
 	var bodyBytes []byte
-	if captureRespBody {
-		bodyBytes, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
+	if captureRespBody && resp.Body != nil {
+		bodyBytes, _ = ioutil.ReadAll(resp.Body)
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 	}
 
@@ -66,7 +63,9 @@ func (a *API) Do(ctx context.Context, req *http.Request, result interface{}) err
 		return err
 	}
 	if err = apiResp.Error(); err != nil {
-		log.Printf("Body: %s", string(bodyBytes))
+		if captureRespBody {
+			log.Printf("Body: %s", string(bodyBytes))
+		}
 		return err
 	}
 	// Could be done better here, but marshal the apiResp into json, then decode

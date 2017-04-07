@@ -8,12 +8,12 @@ type Parcel struct {
 	Height float64 `json:"height,omitempty"`
 
 	Value              int64  `json:"value,string,omitempty"`
-	Currency           string `json:"currency,omitempty"`
-	Description        string `json:"description,omitempty"`
-	ShipperReference   string `json:"shipper_reference,omitempty"`
-	RecipientReference string `json:"recipient_reference,omitempty"`
-	CustomerReference  string `json:"customer_reference,omitempty"`
-	CountryOfOrigin    string `json:"country_of_origin,omitempty"`
+	Currency           string `json:"currency"`
+	Description        string `json:"description"`
+	ShipperReference   string `json:"shipper_reference"`
+	RecipientReference string `json:"recipient_reference"`
+	CustomerReference  string `json:"customer_reference"`
+	CountryOfOrigin    string `json:"country_of_origin"`
 
 	InsuredValue    float64 `json:"insured_value,omitempty"`
 	InsuredCurrency string  `json:"insured_currency,omitempty"`

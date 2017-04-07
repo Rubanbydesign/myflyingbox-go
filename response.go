@@ -1,6 +1,10 @@
 package myflyingbox
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 // Response is the base response type for all API responses.
 type Response struct {
@@ -20,10 +24,14 @@ func (r Response) Error() error {
 
 // ErrorInfo is an upstream error
 type ErrorInfo struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
+	Type    string   `json:"type"`
+	Message string   `json:"message"`
+	Details []string `json:"details"`
 }
 
 func (e ErrorInfo) Error() error {
-	return errors.New(e.Message)
+	if len(e.Details) == 0 {
+		return errors.New(e.Message)
+	}
+	return fmt.Errorf("%s: %s", e.Message, strings.Join(e.Details, ", "))
 }
