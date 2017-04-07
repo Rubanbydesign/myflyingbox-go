@@ -30,5 +30,4 @@ func TestPrepareRequest(t *testing.T) {
 
 	api := getAPI()
 	assert.Error(t, api.Post(ctx, "/", "", nil))
-	// assert.Equal(t, "foobar", prepareRequest(&Order{OfferID: "foobar"}).Order.OfferID)
 }

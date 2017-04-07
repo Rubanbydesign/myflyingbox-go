@@ -3,12 +3,14 @@ package myflyingbox
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
+
+	"golang.org/x/net/context"
 )
 
 const (
@@ -53,6 +55,7 @@ func (a *API) Do(ctx context.Context, req *http.Request, result interface{}) err
 	// 	if err != nil {
 	// 		return err
 	// 	}
+	// 	log.Printf("Body: %s", string(bodyBytes))
 	// 	resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 	// }
 
@@ -65,13 +68,16 @@ func (a *API) Do(ctx context.Context, req *http.Request, result interface{}) err
 	}
 	// Could be done better here, but marshal the apiResp into json, then decode
 	// back into result.
-	data, err := json.Marshal(apiResp.Data)
-	if err != nil {
-		return err
+	if result != nil {
+		data, err := json.Marshal(apiResp.Data)
+		if err != nil {
+			return err
+		}
+		if err = json.Unmarshal(data, result); err != nil {
+			return err
+		}
 	}
-	if err = json.Unmarshal(data, result); err != nil {
-		return err
-	}
+
 	return nil
 }
 
@@ -87,7 +93,9 @@ func (a *API) Post(ctx context.Context, urlStr string, data, result interface{})
 
 	// Marshal the data. Since the payload was already formatted, there won't be any errors encoding.
 	buf := bytes.NewBuffer(nil)
-	json.NewEncoder(buf).Encode(payload)
+	if err := json.NewEncoder(buf).Encode(payload); err != nil {
+		return err
+	}
 
 	// Create the request
 	req, _ := http.NewRequest("POST", a.baseURL+"/"+strings.TrimPrefix(urlStr, "/"), buf)
@@ -136,9 +144,24 @@ func (a *API) CancelOrder(ctx context.Context, o interface{}) (*Order, error) {
 	return &result, nil
 }
 
-// LabelURL returns a url which can be used to download the label PDF directly.
-func (a *API) LabelURL(ctx context.Context, o *Order) string {
-	return fmt.Sprintf("%s/v2/orders/%s/labels", a.baseURL, o.ID)
+// LabelPDF returns the label PDF as a byte slice
+func (a *API) LabelPDF(ctx context.Context, o interface{}) ([]byte, error) {
+	orderID, err := getOrderID(o)
+	if err != nil {
+		return nil, err
+	}
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/orders/%s/labels", a.baseURL, orderID), nil)
+	req.SetBasicAuth(a.username, a.password)
+	resp, err := a.getClient(ctx).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return bodyBytes, nil
 }
 
 // Track returns tracking information about the given order

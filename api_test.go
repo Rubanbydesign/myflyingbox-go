@@ -1,7 +1,7 @@
 package myflyingbox
 
 import (
-	"context"
+	"golang.org/x/net/context"
 	"os"
 	"testing"
 
